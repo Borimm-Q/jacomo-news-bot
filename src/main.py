@@ -50,9 +50,11 @@ def run() -> None:
         return
 
     new_items = [it for it in items if not state.is_seen(seen, it["id"])]
+    # 최신순 정렬 — 한꺼번에 많이 떠도 '따끈한 것 먼저' 보낸다. 묵은 건 자연히 밀려 안 나감.
+    new_items.sort(key=lambda it: it.get("published_at") or 0.0, reverse=True)
     print(f"[main] 신규 {len(new_items)}건")
 
-    # 한 번에 너무 많이 보내지 않도록 제한. 남은 건 다음 실행에서 처리.
+    # 한 번에 너무 많이 보내지 않도록 제한(최신순 상위 N). 남은 건 다음 실행에서 재평가.
     to_process = new_items[: config.MAX_POSTS_PER_RUN]
 
     # 배칭: 여러 건을 한 번의 Claude 호출로 가공(비용 절감)
