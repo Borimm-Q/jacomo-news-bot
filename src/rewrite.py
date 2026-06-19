@@ -14,10 +14,10 @@ import anthropic
 
 import config
 
-_SYSTEM = """\
+_RULES = """\
 너는 한국 투자자 커뮤니티 텔레그램 '속보' 채널의 편집자야.
 코인뿐 아니라 시장 전반(거래소 공지, 코인, 매크로 경제, 금리/환율/유가,
-지정학, 주요 기업/규제 소식) 한 건을 받아서, 한국인이 보기 좋게 가공한다.
+지정학, 주요 기업/규제 소식)을 받아서, 한국인이 보기 좋게 가공한다.
 
 [매우 중요한 규칙]
 1. 원문 문장을 절대 그대로 옮기지 마라. 사실(누가/무엇을/언제/수치)만 뽑아 네 문장으로 새로 써라.
@@ -34,7 +34,10 @@ _SYSTEM = """\
 7. category 는 내용에 맞게 고른다:
    - "exchange": 거래소 공식 공지(상장/이벤트/점검 등)
    - "crypto": 코인·블록체인 관련 소식
-   - "market": 매크로 경제·금리/환율/유가·지정학·기업/규제 소식
+   - "market": 매크로 경제·금리/환율/유가·지정학·기업/규제 소식"""
+
+# 단건 처리용
+_SYSTEM = _RULES + """
 
 [출력 형식]
 아무 설명 없이 아래 JSON 하나만 출력해라:
@@ -44,8 +47,19 @@ _SYSTEM = """\
   "title_ko": "한 줄 한국어 제목",
   "summary_ko": "2~3문장 한국어 요약(사실만)",
   "category": "exchange" 또는 "crypto" 또는 "market"
-}
-"""
+}"""
+
+# 여러 건을 한 번에 처리(배칭)용 — 비용 절감 핵심
+_SYSTEM_BATCH = _RULES + """
+
+[출력 형식]
+여러 건을 한 번에 받는다. 각 항목 앞의 번호([0], [1] ...)를 그대로 써서,
+아무 설명 없이 아래 형태의 JSON 배열 하나만 출력해라:
+[
+  {"index": 0, "publish": true/false, "reason": "...", "title_ko": "...", "summary_ko": "...", "category": "exchange|crypto|market"},
+  {"index": 1, ...}
+]
+입력으로 받은 모든 번호에 대해 정확히 하나씩 객체를 만들어야 한다."""
 
 _client: anthropic.Anthropic | None = None
 
@@ -104,10 +118,14 @@ def process(item: dict) -> dict | None:
         print(f"[rewrite] JSON 파싱 실패(건너뜀): {raw[:120]!r}")
         return None
 
+    return _to_result(data, item)
+
+
+def _to_result(data: dict, item: dict) -> dict | None:
+    """Claude 판정(dict)을 발행용 결과로 변환. 발행 안 하면 None."""
     if not data.get("publish"):
         print(f"[rewrite] 제외: {item['title'][:40]} → {data.get('reason', '')}")
         return None
-
     return {
         "title_ko": data.get("title_ko") or item["title"],
         "summary_ko": data.get("summary_ko") or "",
@@ -115,3 +133,67 @@ def process(item: dict) -> dict | None:
         "url": item["url"],
         "source_name": item["source_name"],
     }
+
+
+def _parse_json_array(text: str) -> list | None:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start, end = text.find("["), text.rfind("]")
+    if start == -1 or end == -1:
+        return None
+    try:
+        data = json.loads(text[start : end + 1])
+        return data if isinstance(data, list) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def process_batch(items: list[dict]) -> list[dict]:
+    """여러 항목을 한 번의 Claude 호출로 가공(배칭) — 비용 절감용.
+
+    반환: 발행할 결과 dict들의 리스트(입력 순서 유지). 발행 제외분은 빠진다.
+    호출자는 입력 items 전부를 'seen'으로 기록해야 한다(발행 여부 무관).
+    """
+    if not items:
+        return []
+
+    numbered = []
+    for i, it in enumerate(items):
+        body = (it.get("body") or "(없음)")[:300]
+        numbered.append(
+            f"[{i}] 출처유형:{it['source_type']} | 출처:{it['source_name']} | "
+            f"제목:{it['title']} | 본문:{body} | 링크:{it['url']}"
+        )
+    user_msg = "다음 여러 건을 각각 판정해라:\n\n" + "\n\n".join(numbered)
+
+    try:
+        resp = _get_client().messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=min(400 * len(items) + 200, 8000),
+            system=_SYSTEM_BATCH,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        raw = "".join(b.text for b in resp.content if b.type == "text")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[rewrite] Claude 배치 호출 실패(전체 건너뜀): {exc}")
+        return []
+
+    arr = _parse_json_array(raw)
+    if arr is None:
+        print(f"[rewrite] 배치 JSON 파싱 실패(전체 건너뜀): {raw[:150]!r}")
+        return []
+
+    by_index = {d.get("index"): d for d in arr if isinstance(d, dict)}
+    results = []
+    for i, it in enumerate(items):
+        data = by_index.get(i)
+        if not data:
+            print(f"[rewrite] 배치 응답 누락(건너뜀): [{i}] {it['title'][:40]}")
+            continue
+        result = _to_result(data, it)
+        if result:
+            results.append(result)
+    return results

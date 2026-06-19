@@ -36,12 +36,13 @@ def run() -> None:
     # 한 번에 너무 많이 보내지 않도록 제한. 남은 건 다음 실행에서 처리.
     to_process = new_items[: config.MAX_POSTS_PER_RUN]
 
-    posted = 0
+    # 배칭: 여러 건을 한 번의 Claude 호출로 가공(비용 절감)
+    results = rewrite.process_batch(to_process)
     for it in to_process:
-        result = rewrite.process(it)
         state.mark(seen, it["id"])  # 발행 여부와 무관하게 재처리 방지
-        if not result:
-            continue
+
+    posted = 0
+    for result in results:
         text = telegram.format_message(
             title_ko=result["title_ko"],
             summary_ko=result["summary_ko"],
