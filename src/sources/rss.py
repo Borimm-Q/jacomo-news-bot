@@ -20,6 +20,9 @@ _FEEDS = [
     ("The Block", "https://www.theblock.co/rss.xml", "crypto"),
     ("Decrypt", "https://decrypt.co/feed", "crypto"),
     ("Wu Blockchain", "https://wublock.substack.com/feed", "crypto"),
+    # 한국 코인 매체 (공식 RSS) — 코인니스 대신 1차 매체를 직접
+    ("토큰포스트", "https://www.tokenpost.kr/rss", "crypto"),
+    ("블록미디어", "https://www.blockmedia.co.kr/feed", "crypto"),
 ]
 
 _TAG_RE = re.compile(r"<[^>]+>")

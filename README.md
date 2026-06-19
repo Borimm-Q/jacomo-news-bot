@@ -5,7 +5,7 @@
 
 - **소스**:
   - ① 거래소 공식 공지 (업비트·바이낸스)
-  - ② 코인 매체 RSS (CoinDesk·Cointelegraph·The Block·Decrypt·Wu Blockchain)
+  - ② 코인 매체 RSS (CoinDesk·Cointelegraph·The Block·Decrypt·Wu Blockchain·토큰포스트·블록미디어)
   - ③ 시장·매크로·지정학 뉴스 (Finnhub: general·forex·crypto·merger)
   - ④ 코인 뉴스 보강 (CryptoPanic, 선택)
 - **가공**: Claude(Haiku)가 사실만 추출해 한국어 친절체로 새로 작성 + 분류/필터
