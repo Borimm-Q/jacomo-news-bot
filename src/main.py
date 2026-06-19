@@ -1,13 +1,19 @@
 """자코모 텔레그램 속보 봇 — 전체 오케스트레이션.
 
-흐름: 소스 수집 → 중복 제거 → (Claude 가공/필터) → 텔레그램 발행 → 상태 저장
-GitHub Actions cron 이 5분마다 이 파일을 실행합니다.
+흐름: 소스 수집 → 중복 제거 → (Claude 가공/필터/사건중복제거) → 텔레그램 발행 → 상태 저장
+GitHub Actions cron 이 15분마다 이 파일을 실행합니다.
 """
+import random
+import time
+
 import config
 import rewrite
 import state
 import telegram
 from sources import collect_all
+
+# 발행 사이 딜레이(초) — 한꺼번에 다다다 쏟아지는 걸 막는 난수 간격
+_DELAY_MIN, _DELAY_MAX = 30, 60
 
 
 def run() -> None:
@@ -18,6 +24,7 @@ def run() -> None:
         return
 
     seen = state.load_seen()
+    published = state.load_published()
     items = collect_all()
     print(f"[main] 수집 {len(items)}건")
 
@@ -37,12 +44,13 @@ def run() -> None:
     to_process = new_items[: config.MAX_POSTS_PER_RUN]
 
     # 배칭: 여러 건을 한 번의 Claude 호출로 가공(비용 절감)
-    results = rewrite.process_batch(to_process)
+    # + 최근 발행 목록을 넘겨 회차 간 '같은 사건' 중복을 거른다.
+    results = rewrite.process_batch(to_process, recent_titles=state.recent_titles(published))
     for it in to_process:
         state.mark(seen, it["id"])  # 발행 여부와 무관하게 재처리 방지
 
     posted = 0
-    for result in results:
+    for i, result in enumerate(results):
         text = telegram.format_message(
             title_ko=result["title_ko"],
             summary_ko=result["summary_ko"],
@@ -53,10 +61,16 @@ def run() -> None:
         try:
             telegram.send(text)
             posted += 1
+            state.add_published(published, result["title_ko"])  # 발행 이력에 기록
         except RuntimeError as exc:
             print(f"[main] 발송 실패: {exc}")
+            continue
+        # 마지막 항목 빼고 난수 딜레이 (한꺼번에 쏟아짐 방지). 미리보기(DRY_RUN)는 안 쉼.
+        if not config.DRY_RUN and i < len(results) - 1:
+            time.sleep(random.uniform(_DELAY_MIN, _DELAY_MAX))
 
     state.save_seen(seen)
+    state.save_published(published)
     print(f"[main] 완료: {posted}건 발행, {len(new_items) - len(to_process)}건 다음 실행 대기")
 
 

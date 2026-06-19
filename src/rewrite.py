@@ -34,7 +34,11 @@ _RULES = """\
 7. category 는 내용에 맞게 고른다:
    - "exchange": 거래소 공식 공지(상장/이벤트/점검 등)
    - "crypto": 코인·블록체인 관련 소식
-   - "market": 매크로 경제·금리/환율/유가·지정학·기업/규제 소식"""
+   - "market": 매크로 경제·금리/환율/유가·지정학·기업/규제 소식
+8. 중요도가 낮으면 발행하지 않는다(publish=false): 정기 시세브리핑/마감시황, 사소한 업데이트,
+   별 의미 없는 일정 안내, 단신 나열 등. "이게 속보로 알릴 만한가?" 아니면 거른다.
+9. 한국어 기사(토큰포스트·블록미디어 등)도 원문 표현을 그대로 옮기지 마라. 사실만 뽑아
+   완전히 새 문장으로 바꿔 써라. (한국어→한국어라도 베끼기 금지)"""
 
 # 단건 처리용
 _SYSTEM = _RULES + """
@@ -51,6 +55,14 @@ _SYSTEM = _RULES + """
 
 # 여러 건을 한 번에 처리(배칭)용 — 비용 절감 핵심
 _SYSTEM_BATCH = _RULES + """
+
+[중복 제거 — 매우 중요, 반드시 지켜라]
+A. 같은 배치 안에서 '같은 사건'을 다루는 항목이 여러 개면(여러 매체가 같은 뉴스를 보도),
+   그중 가장 정보가 풍부한 딱 1개만 publish=true 로 하고, 나머지는 전부 publish=false,
+   reason="중복" 으로 처리해라.
+B. 입력 끝에 [최근 이미 발행한 속보] 목록이 주어지면, 새 항목이 그 목록의 어느 것과
+   '같은 사건'이면 publish=false, reason="이미 발행" 으로 처리해라.
+같은 사건 판단은 제목이 글자 그대로 같지 않아도, 핵심 사실(주체·사건)이 동일하면 같은 것으로 본다.
 
 [출력 형식]
 여러 건을 한 번에 받는다. 각 항목 앞의 번호([0], [1] ...)를 그대로 써서,
@@ -151,9 +163,10 @@ def _parse_json_array(text: str) -> list | None:
         return None
 
 
-def process_batch(items: list[dict]) -> list[dict]:
+def process_batch(items: list[dict], recent_titles: list[str] | None = None) -> list[dict]:
     """여러 항목을 한 번의 Claude 호출로 가공(배칭) — 비용 절감용.
 
+    recent_titles: 최근 이미 발행한 속보 제목들. 새 항목이 이와 같은 사건이면 거른다(회차 간 중복 방지).
     반환: 발행할 결과 dict들의 리스트(입력 순서 유지). 발행 제외분은 빠진다.
     호출자는 입력 items 전부를 'seen'으로 기록해야 한다(발행 여부 무관).
     """
@@ -168,6 +181,10 @@ def process_batch(items: list[dict]) -> list[dict]:
             f"제목:{it['title']} | 본문:{body} | 링크:{it['url']}"
         )
     user_msg = "다음 여러 건을 각각 판정해라:\n\n" + "\n\n".join(numbered)
+
+    if recent_titles:
+        recent_block = "\n".join(f"- {t}" for t in recent_titles[:60])
+        user_msg += f"\n\n[최근 이미 발행한 속보]\n{recent_block}"
 
     try:
         resp = _get_client().messages.create(

@@ -8,7 +8,8 @@ from pathlib import Path
 
 # 프로젝트 루트 (이 파일의 상위의 상위)
 ROOT = Path(__file__).resolve().parent.parent
-STATE_PATH = ROOT / "state" / "seen.json"
+STATE_PATH = ROOT / "state" / "seen.json"            # 처리한 항목 ID (소스별 중복 방지)
+PUBLISHED_PATH = ROOT / "state" / "published.json"   # 최근 발행한 속보 제목 (사건 중복 방지)
 
 
 def _load_dotenv() -> None:
