@@ -44,6 +44,8 @@ def get(name: str, default: str | None = None, required: bool = False) -> str | 
 # 자주 쓰는 값들
 TELEGRAM_BOT_TOKEN = lambda: get("TELEGRAM_BOT_TOKEN", required=True)  # noqa: E731
 TELEGRAM_CHANNEL_ID = lambda: get("TELEGRAM_CHANNEL_ID", required=True)  # noqa: E731
+# 포럼(주제별) 그룹의 특정 토픽에만 쏠 때 사용. 일반 채널이면 비워둠.
+TELEGRAM_THREAD_ID = lambda: get("TELEGRAM_THREAD_ID", default="")  # noqa: E731
 ANTHROPIC_API_KEY = lambda: get("ANTHROPIC_API_KEY", required=True)  # noqa: E731
 CRYPTOPANIC_TOKEN = lambda: get("CRYPTOPANIC_TOKEN", default="")  # noqa: E731
 FINNHUB_TOKEN = lambda: get("FINNHUB_TOKEN", default="")  # noqa: E731

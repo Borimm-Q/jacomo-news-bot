@@ -50,14 +50,20 @@ def send(text: str) -> dict:
         print("------------------------------------------")
         return {"ok": True, "dry_run": True}
 
+    payload = {
+        "chat_id": config.TELEGRAM_CHANNEL_ID(),
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": False,
+    }
+    # 포럼 토픽 지정(있을 때만) — 그 토픽 안에만 발행되고 본방 다른 곳엔 안 감
+    thread = config.TELEGRAM_THREAD_ID()
+    if thread:
+        payload["message_thread_id"] = int(thread)
+
     resp = requests.post(
         _API.format(token=config.TELEGRAM_BOT_TOKEN()),
-        json={
-            "chat_id": config.TELEGRAM_CHANNEL_ID(),
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": False,
-        },
+        json=payload,
         timeout=20,
     )
     data = resp.json()

@@ -88,7 +88,8 @@ python src/main.py
      비밀값은 코드가 아니라 Secrets 에 저장하므로 공개되어도 안전합니다.
 2. 저장소 → **Settings → Secrets and variables → Actions** 에서 아래 항목 등록:
    - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_CHANNEL_ID`
+   - `TELEGRAM_CHANNEL_ID` (그룹/채널 ID, 예: `-1002482804660`)
+   - `TELEGRAM_THREAD_ID` (선택 — 포럼 그룹의 특정 토픽에만 쏠 때, 예: `234566`)
    - `ANTHROPIC_API_KEY`
    - `FINNHUB_TOKEN`
    - `CRYPTOPANIC_TOKEN` (선택 — 없으면 코인 뉴스 보강만 생략)
