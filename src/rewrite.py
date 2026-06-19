@@ -1,0 +1,117 @@
+"""Claude(Haiku)로 수집 항목을 가공합니다.
+
+역할:
+1) 발행 여부 판단(필터) — 가격 급등락 단순 알림, 자두두 관련, 광고/사기성, 무의미 항목 제외
+2) 사실만 추출해 한국어 친절체로 재작성 (원문 문장 복제 금지 = 저작권 안전)
+3) 카테고리 분류
+
+원문 표현을 그대로 옮기지 않고 '사실'만 새 문장으로 쓰므로 한국 저작권법상
+'사실의 전달에 불과한 시사보도'(제7조 5호) 범위에서 안전하게 운영됩니다.
+"""
+import json
+
+import anthropic
+
+import config
+
+_SYSTEM = """\
+너는 한국 투자자 커뮤니티 텔레그램 '속보' 채널의 편집자야.
+코인뿐 아니라 시장 전반(거래소 공지, 코인, 매크로 경제, 금리/환율/유가,
+지정학, 주요 기업/규제 소식) 한 건을 받아서, 한국인이 보기 좋게 가공한다.
+
+[매우 중요한 규칙]
+1. 원문 문장을 절대 그대로 옮기지 마라. 사실(누가/무엇을/언제/수치)만 뽑아 네 문장으로 새로 써라.
+2. 한국어로만 쓴다. 12살도 이해할 만큼 쉽고 친절한 설명체로 쓴다.
+3. 해석·전망·추측·과장·투자 권유는 절대 하지 마라. 확인된 '사실'만 전한다.
+   ("~로 보인다", "~할 전망이다", "시장에 호재/악재" 같은 해석 문장 금지)
+4. 아래에 해당하면 발행하지 않는다(publish=false):
+   - 단순 가격 급등락/시세 변동 알림 (예: "비트코인 5% 상승", "ETF 26억 이동" 같은 시세·자금이동 그 자체)
+   - '자두두' 유튜버나 '자코모' 커뮤니티와 관련된 내용
+   - 광고, 홍보, 에어드랍 유도, 사기 의심, 도박성, 유료 구독 권유
+   - 제목만으로 무슨 일인지 알 수 없거나 가치가 낮은 잡담성 내용
+5. 단, 매크로/지정학/경제지표/규제/기업 소식은 '사실'이면 발행한다(코인과 무관해도 OK).
+6. 발행할 때 summary_ko 는 2~3문장으로 핵심 사실만 담는다.
+7. category 는 내용에 맞게 고른다:
+   - "exchange": 거래소 공식 공지(상장/이벤트/점검 등)
+   - "crypto": 코인·블록체인 관련 소식
+   - "market": 매크로 경제·금리/환율/유가·지정학·기업/규제 소식
+
+[출력 형식]
+아무 설명 없이 아래 JSON 하나만 출력해라:
+{
+  "publish": true 또는 false,
+  "reason": "발행하지 않는다면 그 이유(한국어, 한 줄)",
+  "title_ko": "한 줄 한국어 제목",
+  "summary_ko": "2~3문장 한국어 요약(사실만)",
+  "category": "exchange" 또는 "crypto" 또는 "market"
+}
+"""
+
+_client: anthropic.Anthropic | None = None
+
+
+def _get_client() -> anthropic.Anthropic:
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY())
+    return _client
+
+
+def _parse_json(text: str) -> dict | None:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        # ```json 형태 제거
+        if text.lower().startswith("json"):
+            text = text[4:]
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        return None
+    try:
+        return json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+
+
+def process(item: dict) -> dict | None:
+    """한 항목을 가공한다.
+
+    반환: 발행할 항목이면 가공된 dict, 발행하지 않으면 None.
+    (성공/실패와 무관하게 호출자는 이 항목을 'seen'으로 기록해 재시도를 막는다.)
+    """
+    user_msg = (
+        f"출처 유형: {item['source_type']}\n"
+        f"출처명: {item['source_name']}\n"
+        f"제목: {item['title']}\n"
+        f"본문/추가정보: {item.get('body') or '(없음)'}\n"
+        f"링크: {item['url']}"
+    )
+
+    try:
+        resp = _get_client().messages.create(
+            model=config.CLAUDE_MODEL,
+            max_tokens=600,
+            system=_SYSTEM,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        raw = "".join(b.text for b in resp.content if b.type == "text")
+    except Exception as exc:  # noqa: BLE001 - 어떤 API 오류든 이 항목만 건너뜀
+        print(f"[rewrite] Claude 호출 실패(건너뜀): {exc}")
+        return None
+
+    data = _parse_json(raw)
+    if not data:
+        print(f"[rewrite] JSON 파싱 실패(건너뜀): {raw[:120]!r}")
+        return None
+
+    if not data.get("publish"):
+        print(f"[rewrite] 제외: {item['title'][:40]} → {data.get('reason', '')}")
+        return None
+
+    return {
+        "title_ko": data.get("title_ko") or item["title"],
+        "summary_ko": data.get("summary_ko") or "",
+        "category": data.get("category") or item["source_type"],
+        "url": item["url"],
+        "source_name": item["source_name"],
+    }

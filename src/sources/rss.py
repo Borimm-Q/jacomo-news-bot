@@ -1,0 +1,74 @@
+"""RSS 피드 수집 (무료·합법).
+
+특파원 김씨 출처 분석 결과, 그들이 가장 많이 인용하는 매체들은 대부분 무료 RSS 를
+제공한다. 특히 1위 출처인 콜린 우(@WuBlockchain)도 Substack RSS 를 무료로 연다.
+우리는 이 RSS 들의 '제목+요약(사실)'만 받아 Claude 로 한국어로 새로 쓴다.
+
+표준 라이브러리(xml.etree)만 사용 — 모든 대상 피드가 RSS 2.0(<item>) 형식이다.
+"""
+import re
+import xml.etree.ElementTree as ET
+
+import requests
+
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JacomoNewsBot/1.0)"}
+
+# (출처명, 피드 URL, 내부 분류)
+_FEEDS = [
+    ("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "crypto"),
+    ("Cointelegraph", "https://cointelegraph.com/rss", "crypto"),
+    ("The Block", "https://www.theblock.co/rss.xml", "crypto"),
+    ("Decrypt", "https://decrypt.co/feed", "crypto"),
+    ("Wu Blockchain", "https://wublock.substack.com/feed", "crypto"),
+]
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _text(elem, tag: str) -> str:
+    child = elem.find(tag)
+    return (child.text or "").strip() if child is not None and child.text else ""
+
+
+def _strip_html(s: str) -> str:
+    return _TAG_RE.sub("", s).strip()
+
+
+def _parse_feed(name: str, url: str, internal_type: str) -> list[dict]:
+    resp = requests.get(url, headers=_HEADERS, timeout=20)
+    resp.raise_for_status()
+    root = ET.fromstring(resp.content)
+
+    # RSS 2.0: rss/channel/item
+    items_xml = root.findall(".//item")
+    out = []
+    for it in items_xml:
+        title = _text(it, "title")
+        link = _text(it, "link")
+        guid = _text(it, "guid") or link
+        if not title or not link:
+            continue
+        desc = _strip_html(_text(it, "description"))
+        out.append(
+            {
+                "id": f"rss:{guid}",
+                "source_type": internal_type,
+                "source_name": name,
+                "title": title,
+                "url": link,
+                "body": desc[:500],
+            }
+        )
+    return out
+
+
+def collect() -> list[dict]:
+    items: list[dict] = []
+    for name, url, internal_type in _FEEDS:
+        try:
+            fetched = _parse_feed(name, url, internal_type)
+            items.extend(fetched)
+            print(f"[rss] {name}: {len(fetched)}건 수집")
+        except (requests.RequestException, ET.ParseError, ValueError) as exc:
+            print(f"[rss] {name} 수집 실패(건너뜀): {exc}")
+    return items
