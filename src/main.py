@@ -54,18 +54,21 @@ def run() -> None:
     new_items.sort(key=lambda it: it.get("published_at") or 0.0, reverse=True)
     print(f"[main] 신규 {len(new_items)}건")
 
-    # 한 번에 너무 많이 보내지 않도록 제한(최신순 상위 N). 남은 건 다음 실행에서 재평가.
-    to_process = new_items[: config.MAX_POSTS_PER_RUN]
+    # 밀릴 때 '중요·비중복'이 먼저 나가도록, 후보는 상한의 2배까지 넉넉히 Claude에 넘긴다.
+    # (평소엔 신규가 몇 개뿐이라 추가 비용 없음. 버스트 때만 더 넓게 평가)
+    candidates = new_items[: config.MAX_POSTS_PER_RUN * 2]
 
-    # 배칭: 여러 건을 한 번의 Claude 호출로 가공(비용 절감)
-    # + 최근 발행 목록을 넘겨 회차 간 '같은 사건' 중복을 거른다.
-    results = rewrite.process_batch(to_process, recent_titles=state.recent_titles(published))
-    for it in to_process:
+    # 배칭: 한 번의 Claude 호출로 가공(저중요도·중복 제거) + 최근 발행분 대조로 회차 간 중복 차단
+    results = rewrite.process_batch(candidates, recent_titles=state.recent_titles(published))
+    for it in candidates:
         state.mark(seen, it["id"])  # 발행 여부와 무관하게 재처리 방지
+
+    # 살아남은 것 중 최신순 상위 N건만 발행 (results 는 candidates(최신순) 순서 유지)
+    to_post = results[: config.MAX_POSTS_PER_RUN]
 
     now = time.time()
     posted = 0
-    for i, result in enumerate(results):
+    for i, result in enumerate(to_post):
         tag = _make_tag(result.get("kind", "news"), result.get("published_at"), now)
         text = telegram.format_message(
             title_ko=result["title_ko"],
@@ -83,12 +86,12 @@ def run() -> None:
             print(f"[main] 발송 실패: {exc}")
             continue
         # 마지막 항목 빼고 난수 딜레이 (한꺼번에 쏟아짐 방지). 미리보기(DRY_RUN)는 안 쉼.
-        if not config.DRY_RUN and i < len(results) - 1:
+        if not config.DRY_RUN and i < len(to_post) - 1:
             time.sleep(random.uniform(_DELAY_MIN, _DELAY_MAX))
 
     state.save_seen(seen)
     state.save_published(published)
-    print(f"[main] 완료: {posted}건 발행, {len(new_items) - len(to_process)}건 다음 실행 대기")
+    print(f"[main] 완료: {posted}건 발행 (후보 {len(candidates)}건 평가), 신규 {len(new_items)}건")
 
 
 if __name__ == "__main__":
