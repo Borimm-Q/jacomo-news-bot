@@ -11,7 +11,15 @@ import xml.etree.ElementTree as ET
 
 import requests
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; JacomoNewsBot/1.0)"}
+# 일부 피드(Substack 등)가 봇 UA를 막아서, 일반 브라우저 UA로 위장
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+}
 
 # (출처명, 피드 URL, 내부 분류)
 _FEEDS = [
