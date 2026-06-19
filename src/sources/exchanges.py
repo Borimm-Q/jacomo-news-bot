@@ -7,7 +7,26 @@
 NOTE: 실제 운영 전 각 엔드포인트의 응답을 한 번 확인하세요(README 의 검증 절차 참고).
 막히는 거래소는 비활성화하거나 공식 공지 RSS 로 대체하면 됩니다.
 """
+from datetime import datetime
+
 import requests
+
+
+def _iso(s: str | None) -> float | None:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except (ValueError, AttributeError):
+        return None
+
+
+def _ms(v) -> float | None:
+    try:
+        return float(v) / 1000.0
+    except (TypeError, ValueError):
+        return None
+
 
 _HEADERS = {
     "User-Agent": (
@@ -41,6 +60,7 @@ def _upbit() -> list[dict]:
                 "title": title,
                 "url": f"https://upbit.com/service_center/notice?id={nid}",
                 "body": "",
+                "published_at": _iso(n.get("listed_at") or n.get("first_listed_at")),
             }
         )
     return items
@@ -72,6 +92,7 @@ def _binance() -> list[dict]:
                 "title": title,
                 "url": f"https://www.binance.com/en/support/announcement/{code}",
                 "body": "",
+                "published_at": _ms(a.get("releaseDate")),
             }
         )
     return items
@@ -98,6 +119,7 @@ def _okx() -> list[dict]:
                     "title": title,
                     "url": link,
                     "body": "",
+                    "published_at": _ms(n.get("pTime")),
                 }
             )
     return items
@@ -125,15 +147,18 @@ def _kucoin() -> list[dict]:
                 "title": title,
                 "url": link,
                 "body": (n.get("annDesc") or "").strip(),
+                "published_at": _ms(n.get("publishedAt") or n.get("createdAt")),
             }
         )
     return items
 
 
 # 활성 수집기 목록. 문제가 생기면 여기서 주석 처리하면 됩니다.
-# (빗썸은 Cloudflare 차단으로 제외 — 한국 거래소는 업비트로 커버)
+# 업비트: GitHub Actions(미국 IP)를 지역/데이터센터 차단(403)해서 비활성화.
+#         (한국 IP 서버에서 돌리면 _upbit 다시 켜면 됨. 업비트 상장 소식은 토큰포스트·블록미디어가 보도)
+# 빗썸:   Cloudflare 차단으로 제외.
 _FETCHERS = [
-    ("업비트", _upbit),
+    # ("업비트", _upbit),
     ("바이낸스", _binance),
     ("OKX", _okx),
     ("KuCoin", _kucoin),

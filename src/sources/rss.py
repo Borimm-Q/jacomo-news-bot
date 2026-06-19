@@ -6,8 +6,10 @@
 
 표준 라이브러리(xml.etree)만 사용 — 모든 대상 피드가 RSS 2.0(<item>) 형식이다.
 """
+import email.utils
 import re
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 import requests
 
@@ -27,7 +29,8 @@ _FEEDS = [
     ("Cointelegraph", "https://cointelegraph.com/rss", "crypto"),
     ("The Block", "https://www.theblock.co/rss.xml", "crypto"),
     ("Decrypt", "https://decrypt.co/feed", "crypto"),
-    ("Wu Blockchain", "https://wublock.substack.com/feed", "crypto"),
+    # Wu Blockchain(Substack): GitHub Actions IP를 403 차단해서 제외 (한국 IP면 다시 추가 가능)
+    # ("Wu Blockchain", "https://wublock.substack.com/feed", "crypto"),
     # 한국 코인 매체 (공식 RSS) — 코인니스 대신 1차 매체를 직접
     ("토큰포스트", "https://www.tokenpost.kr/rss", "crypto"),
     ("블록미디어", "https://www.blockmedia.co.kr/feed", "crypto"),
@@ -43,6 +46,23 @@ def _text(elem, tag: str) -> str:
 
 def _strip_html(s: str) -> str:
     return _TAG_RE.sub("", s).strip()
+
+
+def _parse_date(elem) -> float | None:
+    """RSS pubDate(RFC822) 또는 Atom published(ISO)를 epoch초로. 없으면 None."""
+    for tag in ("pubDate", "published", "updated", "date"):
+        t = _text(elem, tag)
+        if not t:
+            continue
+        try:  # RFC822 (RSS 표준)
+            return email.utils.parsedate_to_datetime(t).timestamp()
+        except (TypeError, ValueError, IndexError):
+            pass
+        try:  # ISO 8601 (Atom)
+            return datetime.fromisoformat(t.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            pass
+    return None
 
 
 def _parse_feed(name: str, url: str, internal_type: str) -> list[dict]:
@@ -68,6 +88,7 @@ def _parse_feed(name: str, url: str, internal_type: str) -> list[dict]:
                 "title": title,
                 "url": link,
                 "body": desc[:500],
+                "published_at": _parse_date(it),
             }
         )
     return out

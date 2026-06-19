@@ -6,11 +6,22 @@ CryptoPanic 은 여러 매체의 기사를 모아 '제목 + 출처 + 링크'만 
 
 API 문서: https://cryptopanic.com/developers/api/
 """
+from datetime import datetime
+
 import requests
 
 import config
 
 _URL = "https://cryptopanic.com/api/v1/posts/"
+
+
+def _parse_iso(s: str | None) -> float | None:
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00")).timestamp()
+    except (ValueError, AttributeError):
+        return None
 
 
 def collect() -> list[dict]:
@@ -52,6 +63,7 @@ def collect() -> list[dict]:
                 "title": title,
                 "url": url,
                 "body": "",
+                "published_at": _parse_iso(post.get("published_at") or post.get("created_at")),
             }
         )
     return items

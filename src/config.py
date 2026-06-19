@@ -51,7 +51,7 @@ ANTHROPIC_API_KEY = lambda: get("ANTHROPIC_API_KEY", required=True)  # noqa: E73
 CRYPTOPANIC_TOKEN = lambda: get("CRYPTOPANIC_TOKEN", default="")  # noqa: E731
 FINNHUB_TOKEN = lambda: get("FINNHUB_TOKEN", default="")  # noqa: E731
 
-MAX_POSTS_PER_RUN = int(get("MAX_POSTS_PER_RUN", default="8") or "8")
+MAX_POSTS_PER_RUN = int(get("MAX_POSTS_PER_RUN", default="10") or "10")
 DRY_RUN = (get("DRY_RUN", default="0") or "0") == "1"
 
 # Claude 모델: 단순 요약·번역 작업이므로 빠르고 저렴한 Haiku 사용

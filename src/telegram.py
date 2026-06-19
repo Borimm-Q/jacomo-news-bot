@@ -23,15 +23,18 @@ def _esc(s: str) -> str:
 
 
 def format_message(title_ko: str, summary_ko: str, category: str, url: str,
-                   source: str = "") -> str:
-    """발행 메시지 본문(HTML)을 만듭니다."""
+                   source: str = "", tag: str = "🚨 [속보]") -> str:
+    """발행 메시지 본문(HTML)을 만듭니다.
+
+    tag: 헤더 태그. 신선도/종류에 따라 "🚨 [속보]" / "🕐 [이전 속보]" / "📊 [분석]" 중 하나.
+    """
     label = _CATEGORY_LABEL.get(category, "속보")
     title_ko = _esc(title_ko.strip())
     summary_ko = _esc(summary_ko.strip())
     src_txt = f" · {_esc(source)}" if source else ""
 
     lines = [
-        f"🚨 <b>[속보] {title_ko}</b>",
+        f"{tag} <b>{title_ko}</b>",
         "",
         summary_ko,
         "",

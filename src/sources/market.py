@@ -64,6 +64,7 @@ def collect() -> list[dict]:
                     "title": headline,
                     "url": url,
                     "body": (a.get("summary") or "").strip(),
+                    "published_at": float(a["datetime"]) if a.get("datetime") else None,
                 }
             )
             count += 1

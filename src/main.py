@@ -15,6 +15,18 @@ from sources import collect_all
 # 발행 사이 딜레이(초) — 한꺼번에 다다다 쏟아지는 걸 막는 난수 간격
 _DELAY_MIN, _DELAY_MAX = 30, 60
 
+# 이 시간(초) 안에 나온 따끈한 뉴스만 [속보], 그 외엔 [이전 속보]
+_FRESH_SECONDS = 10 * 60
+
+
+def _make_tag(kind: str, published_at: float | None, now: float) -> str:
+    """헤더 태그 결정: 분석이면 [분석], 10분 이내 뉴스면 [속보], 그 외엔 [이전 속보]."""
+    if kind == "analysis":
+        return "📊 [분석]"
+    if published_at is not None and (now - published_at) < _FRESH_SECONDS:
+        return "🚨 [속보]"
+    return "🕐 [이전 속보]"
+
 
 def run() -> None:
     # 키가 아직 없으면(예: Secrets 등록 전) 에러 없이 조용히 종료
@@ -49,14 +61,17 @@ def run() -> None:
     for it in to_process:
         state.mark(seen, it["id"])  # 발행 여부와 무관하게 재처리 방지
 
+    now = time.time()
     posted = 0
     for i, result in enumerate(results):
+        tag = _make_tag(result.get("kind", "news"), result.get("published_at"), now)
         text = telegram.format_message(
             title_ko=result["title_ko"],
             summary_ko=result["summary_ko"],
             category=result["category"],
             url=result["url"],
             source=result["source_name"],
+            tag=tag,
         )
         try:
             telegram.send(text)
