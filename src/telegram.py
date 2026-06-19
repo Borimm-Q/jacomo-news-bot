@@ -1,6 +1,4 @@
 """텔레그램 채널 발행 모듈."""
-import html
-
 import requests
 
 import config
@@ -15,13 +13,22 @@ _CATEGORY_LABEL = {
 }
 
 
+def _esc(s: str) -> str:
+    """텔레그램 HTML 모드용 최소 이스케이프.
+
+    텔레그램은 & < > 만 엔티티로 처리하므로 이 셋만 바꾼다.
+    (Python html.escape 처럼 따옴표까지 &#x27; 로 바꾸면 텔레그램에선 글자 그대로 보임)
+    """
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def format_message(title_ko: str, summary_ko: str, category: str, url: str,
                    source: str = "") -> str:
     """발행 메시지 본문(HTML)을 만듭니다."""
     label = _CATEGORY_LABEL.get(category, "속보")
-    title_ko = html.escape(title_ko.strip())
-    summary_ko = html.escape(summary_ko.strip())
-    src_txt = f" · {html.escape(source)}" if source else ""
+    title_ko = _esc(title_ko.strip())
+    summary_ko = _esc(summary_ko.strip())
+    src_txt = f" · {_esc(source)}" if source else ""
 
     lines = [
         f"🚨 <b>[속보] {title_ko}</b>",
@@ -31,7 +38,7 @@ def format_message(title_ko: str, summary_ko: str, category: str, url: str,
         f"🏷️ {label}{src_txt}",
     ]
     if url:
-        lines.append(f'🔗 <a href="{html.escape(url, quote=True)}">원문 보기</a>')
+        lines.append(f'🔗 <a href="{_esc(url)}">원문 보기</a>')
     return "\n".join(lines)
 
 
