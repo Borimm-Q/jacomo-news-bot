@@ -31,7 +31,7 @@ def _make_tag(kind: str, published_at: float | None, now: float) -> str:
 def run() -> None:
     # 키가 아직 없으면(예: Secrets 등록 전) 에러 없이 조용히 종료
     if not config.is_configured():
-        print("[main] 필수 키(Gemini / 텔레그램) 미설정 — 아무 작업 없이 종료합니다. "
+        print("[main] 필수 키(Anthropic / 텔레그램) 미설정 — 아무 작업 없이 종료합니다. "
               "GitHub Secrets 등록 후 자동 동작합니다.")
         return
 
