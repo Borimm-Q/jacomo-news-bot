@@ -2,7 +2,7 @@ name: jacomo-news-bot
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "4,19,34,49 * * * *"
   workflow_dispatch: {}
 
 concurrency:
@@ -41,5 +41,6 @@ jobs:
             echo "no change"
           else
             git commit -m "chore: update state [skip ci]"
-            git push
+            git pull --rebase --autostash origin main || true
+            git push || echo "push skipped"
           fi
