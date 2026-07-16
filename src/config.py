@@ -47,15 +47,15 @@ TELEGRAM_BOT_TOKEN = lambda: get("TELEGRAM_BOT_TOKEN", required=True)  # noqa: E
 TELEGRAM_CHANNEL_ID = lambda: get("TELEGRAM_CHANNEL_ID", required=True)  # noqa: E731
 # 포럼(주제별) 그룹의 특정 토픽에만 쏠 때 사용. 일반 채널이면 비워둠.
 TELEGRAM_THREAD_ID = lambda: get("TELEGRAM_THREAD_ID", default="")  # noqa: E731
-ANTHROPIC_API_KEY = lambda: get("ANTHROPIC_API_KEY", required=True)  # noqa: E731
+GEMINI_API_KEY = lambda: get("GEMINI_API_KEY", required=True)  # noqa: E731
 CRYPTOPANIC_TOKEN = lambda: get("CRYPTOPANIC_TOKEN", default="")  # noqa: E731
 FINNHUB_TOKEN = lambda: get("FINNHUB_TOKEN", default="")  # noqa: E731
 
 MAX_POSTS_PER_RUN = int(get("MAX_POSTS_PER_RUN", default="10") or "10")
 DRY_RUN = (get("DRY_RUN", default="0") or "0") == "1"
 
-# Claude 모델: 단순 요약·번역 작업이므로 빠르고 저렴한 Haiku 사용
-CLAUDE_MODEL = "claude-haiku-4-5"
+# 가공 엔진: 무료 티어로 쓸 수 있는 구글 제미나이 Flash (비용 $0)
+GEMINI_MODEL = get("GEMINI_MODEL", default="gemini-2.0-flash") or "gemini-2.0-flash"
 
 
 def is_configured() -> bool:
@@ -63,10 +63,10 @@ def is_configured() -> bool:
 
     키를 아직 등록하지 않은 상태에서 스케줄이 돌더라도 에러 대신 조용히 종료하도록,
     main 에서 이 함수로 먼저 점검한다.
-    - 항상 필요: ANTHROPIC_API_KEY
+    - 항상 필요: GEMINI_API_KEY
     - 실제 발송(DRY_RUN 아님) 시 추가로 필요: TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID
     """
-    if not get("ANTHROPIC_API_KEY"):
+    if not get("GEMINI_API_KEY"):
         return False
     if not DRY_RUN and not (get("TELEGRAM_BOT_TOKEN") and get("TELEGRAM_CHANNEL_ID")):
         return False
