@@ -90,12 +90,14 @@ def _call_gemini(system: str, user: str, max_tokens: int) -> str:
         "generationConfig": {
             "responseMimeType": "application/json",  # JSON만 출력 강제
             "temperature": 0.3,
+            # 제미나이는 내부 thinking 토큰도 이 한도에서 차감하므로(끄는 건 이 모델이 거부함)
+            # 실제 필요량보다 넉넉히 잡아야 JSON 이 중간에 잘리지 않는다.
             "maxOutputTokens": max_tokens,
         },
     }
     resp = requests.post(
         _ENDPOINT.format(model=config.GEMINI_MODEL),
-        params={"key": config.GEMINI_API_KEY()},
+        headers={"X-goog-api-key": config.GEMINI_API_KEY()},
         json=body,
         timeout=30,
     )
@@ -210,7 +212,7 @@ def process_batch(items: list[dict], recent_titles: list[str] | None = None) -> 
         user_msg += f"\n\n[최근 이미 발행한 속보]\n{recent_block}"
 
     try:
-        raw = _call_gemini(_SYSTEM_BATCH, user_msg, min(400 * len(items) + 200, 8000))
+        raw = _call_gemini(_SYSTEM_BATCH, user_msg, min(700 * len(items) + 1000, 16000))
     except Exception as exc:  # noqa: BLE001
         print(f"[rewrite] Gemini 배치 호출 실패(전체 건너뜀): {exc}")
         return []

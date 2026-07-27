@@ -55,7 +55,7 @@ MAX_POSTS_PER_RUN = int(get("MAX_POSTS_PER_RUN", default="10") or "10")
 DRY_RUN = (get("DRY_RUN", default="0") or "0") == "1"
 
 # 가공 엔진: 무료 티어로 쓸 수 있는 구글 제미나이 Flash (비용 $0)
-GEMINI_MODEL = get("GEMINI_MODEL", default="gemini-2.0-flash") or "gemini-2.0-flash"
+GEMINI_MODEL = get("GEMINI_MODEL", default="gemini-flash-latest") or "gemini-flash-latest"
 
 
 def is_configured() -> bool:
