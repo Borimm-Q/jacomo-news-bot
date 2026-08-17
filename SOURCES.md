@@ -1,7 +1,32 @@
 # 뉴스 소스 목록 (자코모 속보봇)
 
 봇이 15분마다 수집하는 전체 소스와 각 엔드포인트를 정리한 문서입니다.
-회당 약 **500건**을 수집한 뒤, 중복 제거·중요도 필터를 거쳐 최대 8건만 발행합니다.
+매 회차마다 **16개 매체에서 약 500건**을 수집한 뒤, 중복 제거·중요도 필터를 거쳐 최대 8건만 발행합니다.
+
+## 실측 수집 현황 (1회 기준, 2026-08-17)
+
+| 매체 | 건수 | 경로 |
+|---|---:|---|
+| Cointelegraph | 78 | RSS + Finnhub |
+| CoinDesk | 73 | RSS + Finnhub |
+| **Reuters** | 73 | Finnhub |
+| 토큰포스트 | 50 | RSS |
+| **GlobalNewswire** | 45 | Finnhub |
+| Decrypt | 34 | RSS |
+| **SeekingAlpha** | 21 | Finnhub |
+| 바이낸스 | 20 | 공식 공지 API |
+| OKX | 20 | 공식 공지 API |
+| KuCoin | 20 | 공식 공지 API |
+| The Block | 20 | RSS |
+| **CNBC** | 14 | Finnhub |
+| **Bloomberg** | 13 | Finnhub |
+| 블록미디어 | 10 | RSS |
+| Forexlive | 2 | Finnhub |
+| BusinessWire | 1 | Finnhub |
+| **합계** | **494** | |
+
+> Reuters·Bloomberg·CNBC 등 주요 외신은 개별 계약 없이 **Finnhub 무료 API를 통해** 헤드라인이 들어옵니다.
+> (아래 3번 항목) 즉 실제 커버리지는 RSS 목록보다 훨씬 넓습니다.
 
 - 정의 위치: `src/sources/` (`exchanges.py`, `rss.py`, `market.py`, `news.py`)
 - 가공 엔진: **구글 제미나이(Gemini) 무료 티어** → API 비용 $0
@@ -56,7 +81,17 @@
 | `merger` | M&A |
 | `crypto` | 코인 |
 
-Reuters, Bloomberg 등 주요 외신 헤드라인이 이 경로로 들어옵니다.
+**이 경로 하나로 매 회차 약 265건**이 들어오며, 실측 기준 아래 매체가 포함됩니다.
+
+- **Reuters** (73건) — 국제 통신사
+- **GlobalNewswire** (45건) — 기업 공시·보도자료
+- **SeekingAlpha** (21건) — 투자 분석
+- **CNBC** (14건) — 경제 방송
+- **Bloomberg** (13건) — 금융 통신사
+- Forexlive, BusinessWire 등
+
+> 즉 Reuters·Bloomberg 같은 대형 외신도 **개별 계약 없이 무료로** 커버됩니다.
+> Finnhub가 매체별 헤드라인·요약·링크를 취합해 제공하며, 본문 전문은 받지 않습니다(저작권 안전).
 
 ---
 
