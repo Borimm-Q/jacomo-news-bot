@@ -11,6 +11,7 @@
 무료 LLM(제미나이)이라 API 비용 $0. REST 호출(requests)만 사용해 별도 SDK 불필요.
 """
 import json
+import time
 
 import requests
 
@@ -95,13 +96,46 @@ def _call_gemini(system: str, user: str, max_tokens: int) -> str:
             "maxOutputTokens": max_tokens,
         },
     }
-    resp = requests.post(
-        _ENDPOINT.format(model=config.GEMINI_MODEL),
-        headers={"X-goog-api-key": config.GEMINI_API_KEY()},
-        json=body,
-        timeout=30,
-    )
-    resp.raise_for_status()
+    # 무료 티어는 429(분당 한도)와 503(일시 과부하)이 잦다. 한 번 실패했다고 회차를
+    # 통째로 날리지 않도록, 같은 모델로 짧게 재시도한 뒤 대체 모델까지 시도한다.
+    models = [config.GEMINI_MODEL]
+    for alt in ("gemini-flash-lite-latest", "gemini-2.5-flash"):
+        if alt not in models:
+            models.append(alt)
+
+    last_exc: Exception | None = None
+    resp = None
+    for model in models:
+        for attempt in range(2):
+            try:
+                resp = requests.post(
+                    _ENDPOINT.format(model=model),
+                    headers={"X-goog-api-key": config.GEMINI_API_KEY()},
+                    json=body,
+                    timeout=60,
+                )
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt == 0:
+                    wait = 5 if resp.status_code == 429 else 3
+                    print(f"[rewrite] {model} {resp.status_code}: {wait}초 후 재시도")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                break
+            except requests.RequestException as exc:
+                last_exc = exc
+                resp = None
+                if attempt == 0:
+                    time.sleep(3)
+                    continue
+        if resp is not None and resp.ok:
+            if model != config.GEMINI_MODEL:
+                print(f"[rewrite] 대체 모델로 처리: {model}")
+            break
+        resp = None
+
+    if resp is None:
+        raise RuntimeError(f"Gemini 호출 실패(모델 {len(models)}종 시도): {last_exc}")
+
     data = resp.json()
     cands = data.get("candidates") or []
     if not cands:  # 안전필터 등으로 후보 없음
