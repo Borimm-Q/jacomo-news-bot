@@ -169,6 +169,7 @@ def _to_result(data: dict, item: dict) -> dict | None:
         "url": item["url"],
         "source_name": item["source_name"],
         "published_at": item.get("published_at"),  # 신선도 태그 계산용
+        "id": item["id"],  # 호출자가 발행 성공분만 seen 처리할 수 있도록 되돌려준다
     }
 
 
@@ -188,12 +189,14 @@ def _parse_json_array(text: str) -> list | None:
         return None
 
 
-def process_batch(items: list[dict], recent_titles: list[str] | None = None) -> list[dict]:
+def process_batch(items: list[dict], recent_titles: list[str] | None = None) -> list[dict] | None:
     """여러 항목을 한 번의 Claude 호출로 가공(배칭) — 비용 절감용.
 
     recent_titles: 최근 이미 발행한 속보 제목들. 새 항목이 이와 같은 사건이면 거른다(회차 간 중복 방지).
-    반환: 발행할 결과 dict들의 리스트(입력 순서 유지). 발행 제외분은 빠진다.
-    호출자는 입력 items 전부를 'seen'으로 기록해야 한다(발행 여부 무관).
+    반환:
+      - list: 발행할 결과 dict들(입력 순서 유지). 판정으로 제외된 건 빠진다.
+      - None: 가공 자체가 실패(호출/응답/파싱 실패). 이때는 판정이 없었던 것이므로
+        호출자가 items 를 'seen' 처리하면 안 된다. 그대로 두고 다음 회차에 재시도한다.
     """
     if not items:
         return []
@@ -214,16 +217,16 @@ def process_batch(items: list[dict], recent_titles: list[str] | None = None) -> 
     try:
         raw = _call_gemini(_SYSTEM_BATCH, user_msg, min(700 * len(items) + 1000, 16000))
     except Exception as exc:  # noqa: BLE001
-        print(f"[rewrite] Gemini 배치 호출 실패(전체 건너뜀): {exc}")
-        return []
+        print(f"[rewrite] Gemini 배치 호출 실패(판정 없음, 다음 회차 재시도): {exc}")
+        return None
     if not raw:
-        print("[rewrite] Gemini 빈 응답(전체 건너뜀)")
-        return []
+        print("[rewrite] Gemini 빈 응답(판정 없음, 다음 회차 재시도)")
+        return None
 
     arr = _parse_json_array(raw)
     if arr is None:
-        print(f"[rewrite] 배치 JSON 파싱 실패(전체 건너뜀): {raw[:150]!r}")
-        return []
+        print(f"[rewrite] 배치 JSON 파싱 실패(판정 없음, 다음 회차 재시도): {raw[:150]!r}")
+        return None
 
     by_index = {d.get("index"): d for d in arr if isinstance(d, dict)}
     results = []

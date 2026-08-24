@@ -60,8 +60,18 @@ def run() -> None:
 
     # 배칭: 한 번의 Claude 호출로 가공(저중요도·중복 제거) + 최근 발행분 대조로 회차 간 중복 차단
     results = rewrite.process_batch(candidates, recent_titles=state.recent_titles(published))
+    if results is None:
+        # 가공 자체가 실패한 회차(429/503/파싱 실패). 판정이 없었으므로 아무것도 seen 처리하지 않고
+        # 상태도 건드리지 않은 채 종료한다. 다음 회차에 같은 항목을 다시 평가한다.
+        print("[main] 가공 실패: 이번 회차는 발행/기록 없이 종료(다음 회차 재시도).")
+        return
+
+    # 판정으로 '제외'된 항목만 지금 seen 처리한다. 발행 후보(results)는 실제로 나간 뒤에 기록한다.
+    # 상한(MAX_POSTS_PER_RUN)에 밀려 이번에 못 나간 것도 남겨둬야 다음 회차에 나간다.
+    pending_ids = {r["id"] for r in results}
     for it in candidates:
-        state.mark(seen, it["id"])  # 발행 여부와 무관하게 재처리 방지
+        if it["id"] not in pending_ids:
+            state.mark(seen, it["id"])  # 저중요도·중복 판정분: 다시 평가하지 않는다
 
     # 살아남은 것 중 최신순 상위 N건만 발행 (results 는 candidates(최신순) 순서 유지)
     to_post = results[: config.MAX_POSTS_PER_RUN]
@@ -81,9 +91,11 @@ def run() -> None:
         try:
             telegram.send(text)
             posted += 1
+            state.mark(seen, result["id"])  # 실제로 나간 뒤에만 처리 완료로 기록
             state.add_published(published, result["title_ko"])  # 발행 이력에 기록
         except RuntimeError as exc:
-            print(f"[main] 발송 실패: {exc}")
+            # seen 처리하지 않으므로 다음 회차에 다시 시도된다.
+            print(f"[main] 발송 실패(다음 회차 재시도): {exc}")
             continue
         # 마지막 항목 빼고 난수 딜레이 (한꺼번에 쏟아짐 방지). 미리보기(DRY_RUN)는 안 쉼.
         if not config.DRY_RUN and i < len(to_post) - 1:
