@@ -1,8 +1,9 @@
 name: jacomo-news-bot
 
 on:
-  schedule:
-    - cron: "4,19,34,49 * * * *"
+  # 정기 실행은 cron-job.org 가 workflow_dispatch 로 깨운다.
+  # GitHub 자체 schedule 도 켜 두면 같은 분에 두 번 실행되어 Gemini 무료 티어
+  # 분당 한도를 두 배로 태우므로(429 유발) 여기서는 쓰지 않는다.
   workflow_dispatch: {}
 
 concurrency:
